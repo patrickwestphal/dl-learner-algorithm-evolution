@@ -1,5 +1,6 @@
 import codecs
 import json
+import logging
 import os
 import subprocess
 import urllib.request
@@ -10,7 +11,10 @@ from datetime import timedelta
 from git.repo import Repo
 
 
-default_repo_dir_path = '/tmp/DL-Learner'
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s %(message)s')
+_log = logging.getLogger()
+
+
 default_time_delta_in_days = 30
 # the trailing slash is important!!!
 components_core_dir = 'components-core/src/main/java/'
@@ -19,19 +23,17 @@ components_core_dir = 'components-core/src/main/java/'
 class DLLearnerRepo(Iterator):
     """
     TODO:
-        - add progress bar
+        - add progress bar for repo download
         - find out automatically whether the repo is already cloned and in case
           it is, just run a pull (after having set the branch)
-        - handle branches
     """
     _commits_get_url = 'https://api.github.com/repos/AKSW/DL-Learner/commits' +\
-                       '?per_page=10000&since=%s'
+                       '?per_page=10000&since=%s&sha=%s'
     _github_repo_url = 'https://github.com/AKSW/DL-Learner.git'
 
-    def __init__(self, repo_dir_path=None, since=None, branch=None,
+    def __init__(self, repo_dir_path, since=None, branch='develop',
                  already_cloned=False):
-        self.repo_dir_path = \
-            default_repo_dir_path if not repo_dir_path else repo_dir_path
+        self.repo_dir_path = repo_dir_path
 
         if since is None:
             self.since = datetime.now() - timedelta(default_time_delta_in_days)
@@ -44,7 +46,14 @@ class DLLearnerRepo(Iterator):
 
         self._setup_repo(already_cloned)
 
+    def __len__(self):
+        if self.commit_sha1s is None:
+            self._init_commit_sha1s()
+
+        return len(self.commit_sha1s)
+
     def _setup_repo(self, already_cloned):
+        # TODO: add logging
         if already_cloned:
             self._git_repo = Repo(self.repo_dir_path)
         else:
@@ -60,8 +69,7 @@ class DLLearnerRepo(Iterator):
 
     def __next__(self):
         if self.commit_sha1s is None:
-            self.commit_sha1s = self._get_commits()
-            self.next_idx = -1
+            self._init_commit_sha1s()
 
         self.next_idx += 1
         if self.next_idx >= len(self.commit_sha1s):
@@ -69,8 +77,14 @@ class DLLearnerRepo(Iterator):
 
         return DLLearnerCommit(self.commit_sha1s[self.next_idx], self)
 
+    def _init_commit_sha1s(self):
+        self.commit_sha1s = self._get_commits()
+        self.next_idx = -1
+
     def _get_commits(self):
-        response = urllib.request.urlopen(self._commits_get_url % self.since.isoformat())
+        response = urllib.request.urlopen(
+            self._commits_get_url % (self.since.isoformat(), self.branch))
+
         encoder = codecs.getreader("utf-8")
         commits = json.load(encoder(response))
 
@@ -82,19 +96,26 @@ class DLLearnerRepo(Iterator):
 
 algorithms = {
     'AbstractCELA': {
-        'score_method_str': 'getCurrentlyBestEvaluatedDescription().getAccuracy()'
+        'score_method_str':
+            'getCurrentlyBestEvaluatedDescription().getAccuracy()'
     }
 }
 
 
+class AlgorithmExecutionError(Exception):
+    pass
+
+
 class DLLearnerCommit(object):
     """
+    My command line trials:
     $ find . -name AbstractCELA.java
     $ sed -i '0,/import /s/import /import org.dllearner.core.AbstractCELA;\nimport /' ./interfaces/src/main/java/org/dllearner/cli/CLI.java
     $ sed -i 's/algorithm.start()/algorithm.start();System.out.println("+.+.+"+((AbstractCELA) algorithm).getCurrentlyBestDescription())/' ./interfaces/src/main/java/org/dllearner/cli/CLI.java
     $ cd interfaces/; mvn exec:java -Dexec.mainClass='org.dllearner.cli.CLI' -Dexec.args="../examples/father.conf"; cd - > /dev/null
     """
     output_marker_pattern = '-*-**-*-'
+    # TODO: make this configurable
     class_to_cast_to = 'AbstractCELA'
 
     def __init__(self, sha1_string, repo):
@@ -102,28 +123,44 @@ class DLLearnerCommit(object):
         self.repo = repo
         self.checkout_cmd = repo.get_checkout_cmd()
         self.algorithm_class = 'AbstractCELA'
+        self._dirty_files = []
 
     def checkout(self):
         return self.checkout_cmd(self.sha1)
 
     def build(self):
-        dirty_files = self._patch_repo()
+        _log.info('Building repo for commit %s' % self.sha1)
+        self._patch_repo()
         subprocess.check_call(['mvn', 'install', '-DskipTests=true'],
-                              cwd=self.repo.repo_dir_path)
+                              cwd=self.repo.repo_dir_path, stdout=open(os.devnull, 'w'))
+        _log.info('-Done-')
 
+    def run(self, path_to_config_file):
+        _log.info('Running learning setup for commit %s' % self.sha1)
         output = subprocess.check_output(
             ['mvn', 'exec:java', '-Dexec.mainClass=org.dllearner.cli.CLI',
-             '-Dexec.args=\'../examples/father.conf\''], cwd=self.repo.repo_dir_path + '/interfaces')
+             '-Dexec.args=\'' + path_to_config_file + '\''],
+            cwd=self.repo.repo_dir_path + '/interfaces')
 
         output = output.decode('utf-8')
-        acc = output.split(self.output_marker_pattern)[1]
+        output_parts = output.split(self.output_marker_pattern)
 
-        # import pdb; pdb.set_trace()
-        print('##############################: ' + acc)
-        with open('/tmp/res.txt', 'a') as f:
-            f.write(acc + '\n')
+        if len(output_parts) > 1:
+            acc = output_parts[1]
+        else:
+            raise AlgorithmExecutionError()
 
-        self._clean_repo(dirty_files)
+        acc = float(acc)
+
+        _log.info('-Done-')
+        return acc
+
+    def clean_up(self):
+        _log.info('Cleaning up repo for commit %s' % self.sha1)
+        for file in self._dirty_files:
+            subprocess.check_call(['git', 'checkout', file],
+                                  cwd=self.repo.repo_dir_path)
+        _log.info('-Done-')
 
     def _patch_repo(self):
         java_file_path = self._find_java_file(self.algorithm_class)
@@ -147,7 +184,7 @@ class DLLearnerCommit(object):
             ' + "' + self.output_marker_pattern + '")/'
         subprocess.check_call(['sed', '-i', sed_replace_str, cli_file_path])
 
-        return [cli_file_path]
+        self._dirty_files.append(cli_file_path)
 
     def _find_java_file(self, algorithm_name):
         file_name = algorithm_name + '.java'
@@ -169,9 +206,6 @@ class DLLearnerCommit(object):
             return 'import ' + tmp
 
         else:
-            raise RuntimeError('Should never happpen (TM) TODO: add useful error msg')
-
-    def _clean_repo(self, dirty_files):
-        for file in dirty_files:
-            subprocess.check_call(['git', 'checkout', file], cwd=self.repo.repo_dir_path)
-        pass
+            raise RuntimeError(
+                'Java file %s outside the repository directory %s!!!' % (
+                    file_path, self.repo.repo_dir_path))

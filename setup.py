@@ -13,7 +13,9 @@ config = {
     'tests_require': [
     ],
     'install_requires': [
-        'GitPython==1.0.1'
+        'GitPython==1.0.1',
+        'numpy==1.9.2',
+        'matplotlib==1.4.3'
     ],
     'packages': ['repo'],
     'scripts': ['bin/makestats'],

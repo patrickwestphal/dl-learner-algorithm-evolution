@@ -3,7 +3,9 @@
 import argparse
 
 import repo
+import output
 
 
 if __name__ == '__main__':
-    repo.main()
+    accuracies, commit_shas = repo.main()
+    output.plot(accuracies, commit_shas, '/tmp/carc.pdf')
