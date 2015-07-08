@@ -17,7 +17,7 @@ config = {
         'numpy==1.9.2',
         'matplotlib==1.4.3'
     ],
-    'packages': ['repo'],
+    'packages': ['repo', 'output'],
     'scripts': ['bin/makestats'],
     'name': 'dl-learner-regression-stats'
 }
