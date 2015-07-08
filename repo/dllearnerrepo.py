@@ -53,12 +53,14 @@ class DLLearnerRepo(Iterator):
         return len(self.commit_sha1s)
 
     def _setup_repo(self, already_cloned):
-        # TODO: add logging
         if already_cloned:
             self._git_repo = Repo(self.repo_dir_path)
         else:
+            _log.info('Cloning repo from %s into %s' % (
+                self._github_repo_url, self.repo_dir_path))
             self._git_repo = Repo.clone_from(
                 self._github_repo_url, self.repo_dir_path)
+            _log.info('-Done-')
 
         if self.branch:
             self._git_repo.git.checkout(self.branch)
@@ -132,7 +134,8 @@ class DLLearnerCommit(object):
         _log.info('Building repo for commit %s' % self.sha1)
         self._patch_repo()
         subprocess.check_call(['mvn', 'install', '-DskipTests=true'],
-                              cwd=self.repo.repo_dir_path, stdout=open(os.devnull, 'w'))
+                              cwd=self.repo.repo_dir_path,
+                              stdout=open(os.devnull, 'w'))
         _log.info('-Done-')
 
     def run(self, path_to_config_file):
