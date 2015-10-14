@@ -1,8 +1,6 @@
 from subprocess import CalledProcessError
 import logging
 
-import numpy as np
-
 from .dllearnerrepo import AlgorithmExecutionError
 from .dllearnerrepo import DLLearnerRepo
 
@@ -22,8 +20,8 @@ def main(repo_dir_path, config_file_path, since, branch='develop',
                          branch=branch, already_cloned=already_cloned)
 
     num_commits = len(repo)
-    accuracies = np.zeros((num_commits, 1), dtype=np.float16)
-    accuracies[accuracies == 0] = np.nan
+    accuracies = [None] * num_commits  # np.zeros((num_commits, 1), dtype=np.float16)
+    #accuracies[accuracies == 0] = np.nan
     commits = []
     cmmt_cntr = 1
 
@@ -45,5 +43,4 @@ def main(repo_dir_path, config_file_path, since, branch='develop',
         commit.clean_up()
         cmmt_cntr += 1
 
-    commits.reverse()  # since we're going from last to older commits
     return accuracies, commits

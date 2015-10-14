@@ -8,7 +8,10 @@ import urllib.request
 from collections import Iterator
 from datetime import datetime
 from datetime import timedelta
+
 from git.repo import Repo
+
+from .knowncommits import KnownCommitsStore
 
 
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s %(message)s')
@@ -33,7 +36,12 @@ class DLLearnerRepo(Iterator):
 
     def __init__(self, repo_dir_path, since=None, branch='develop',
                  already_cloned=False):
-        self.repo_dir_path = repo_dir_path
+
+        # strip off trailing directory separator
+        if repo_dir_path.endswith(os.path.sep):
+            self.repo_dir_path = repo_dir_path[:-1]
+        else:
+            self.repo_dir_path = repo_dir_path
 
         if since is None:
             self.since = datetime.now() - timedelta(default_time_delta_in_days)
@@ -45,6 +53,7 @@ class DLLearnerRepo(Iterator):
         self.next_idx = None
 
         self._setup_repo(already_cloned)
+        self._knwn_cmmits = KnownCommitsStore()
 
     def __len__(self):
         if self.commit_sha1s is None:
@@ -80,7 +89,27 @@ class DLLearnerRepo(Iterator):
         return DLLearnerCommit(self.commit_sha1s[self.next_idx], self)
 
     def _init_commit_sha1s(self):
+        commit_sha1s = []
+
+        for c in self._git_repo.iter_commits():
+            """Iters the commits backwards in time, i.e. the latest commit
+            comes first and the oldest comes last
+            """
+            c_date = datetime.fromtimestamp(c.committed_date)
+
+            if c_date < self.since:
+                break
+
+            c_sha = c.hexsha
+            commit_sha1s.append(c_sha)
+
+        commit_sha1s.reverse()
+        self.commit_sha1s = commit_sha1s
+        self.next_idx = -1
+
+    def _init_commit_sha1s_(self):
         self.commit_sha1s = self._get_commits()
+        self.commit_sha1s.reverse()
         self.next_idx = -1
 
     def _get_commits(self):
@@ -90,10 +119,13 @@ class DLLearnerRepo(Iterator):
         encoder = codecs.getreader("utf-8")
         commits = json.load(encoder(response))
 
-        return [cmmt['sha'] for cmmt in commits]
+        return [c['sha'] for c in commits if c['sha'] not in self._knwn_cmmits]
 
     def get_checkout_cmd(self):
         return self._git_repo.git.checkout
+
+    def mark_commit_as_finished(self, commit_sha):
+        self._knwn_cmmits.append(commit_sha)
 
 
 algorithms = {
@@ -121,6 +153,10 @@ class DLLearnerCommit(object):
     class_to_cast_to = 'AbstractCELA'
 
     def __init__(self, sha1_string, repo):
+        """
+        :param sha1_string: a string containing the commit hash
+        :param repo: the DLLearnerRepo object where this commit belongs to
+        """
         self.sha1 = sha1_string
         self.repo = repo
         self.checkout_cmd = repo.get_checkout_cmd()
@@ -163,6 +199,8 @@ class DLLearnerCommit(object):
         for file in self._dirty_files:
             subprocess.check_call(['git', 'checkout', file],
                                   cwd=self.repo.repo_dir_path)
+
+        self.repo.mark_commit_as_finished(self.sha1)
         _log.info('-Done-')
 
     def _patch_repo(self):
