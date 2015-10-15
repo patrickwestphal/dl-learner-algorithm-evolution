@@ -15,7 +15,7 @@ LAST_RUN_DATE_FILE = '.lastrun'
 def get_last_run_date():
     if not os.path.exists(LAST_RUN_DATE_FILE):
         # half a year back
-        return datetime.datetime.now() - datetime.timedelta(6*30)
+        return datetime.datetime.now() - datetime.timedelta(30)
 
     with open(LAST_RUN_DATE_FILE, 'r') as f:
         last_date_str = f.readline()

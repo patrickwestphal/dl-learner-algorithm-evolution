@@ -100,12 +100,12 @@ class DLLearnerRepo(Iterator):
             if c_date < self.since:
                 break
 
-            c_sha = c.hexsha
-            commit_sha1s.append(c_sha)
+            commit_sha1s.append(c.hexsha)
 
         commit_sha1s.reverse()
-        self.commit_sha1s = commit_sha1s
-        self.next_idx = -1
+
+        self.commit_sha1s = \
+            [c for c in commit_sha1s if c not in self._knwn_cmmits]
 
     def _init_commit_sha1s_(self):
         self.commit_sha1s = self._get_commits()
