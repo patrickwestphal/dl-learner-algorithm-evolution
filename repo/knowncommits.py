@@ -17,7 +17,7 @@ class KnownCommitsStore(object):
             self.commit_shas = []
 
     def __contains__(self, item):
-        pass
+        return item in self.commit_shas
 
     def append(self, commit_sha):
         self.commit_shas.append(commit_sha)
