@@ -12,24 +12,24 @@ import output
 LAST_RUN_DATE_FILE = '.lastrun'
 
 
-def get_last_run_date():
+def get_last_run_data():
     if not os.path.exists(LAST_RUN_DATE_FILE):
-        # half a year back
         return datetime.datetime.now() - datetime.timedelta(30)
 
     with open(LAST_RUN_DATE_FILE, 'r') as f:
         last_date_str = f.readline()
+        last_accuracy = f.readline()
 
         # go back one day to be really sure to not skip any commit
         return datetime.datetime.strptime(last_date_str, '%Y-%m-%d') - \
-            datetime.timedelta(1)
+            datetime.timedelta(1), last_accuracy
 
 
-def set_last_run_date():
+def set_last_run_data(acc):
     date = datetime.datetime.now()
 
     with open(LAST_RUN_DATE_FILE, 'w') as f:
-        f.write(date.strftime('%Y-%m-%d'))
+        f.writelines([date.strftime('%Y-%m-%d'), acc])
 
 
 if __name__ == '__main__':
@@ -70,7 +70,7 @@ if __name__ == '__main__':
     repo_dir = _args.repo_dir[0]
     config_file = _args.setupfile[0]
     if _args.commits_since[0] == 'inc':
-        since = get_last_run_date()
+        since, last_acc = get_last_run_data()
     else:
         since = datetime.datetime.strptime(_args.commits_since[0], '%Y-%m-%d')
     branch = _args.branch if _args.branch is not None else 'develop'
@@ -84,8 +84,18 @@ if __name__ == '__main__':
     accuracies, commit_shas = repo.main(repo_dir, config_file, since, branch,
                                         already_cloned)
 
+    if len(accuracies) > 0:
+        this_runs_accuracy = accuracies[-1]
+    else:
+        this_runs_accuracy = last_acc
+
+    err = min(accuracies) < last_acc
+
     if _args.commits_since[0] == 'inc':
-        set_last_run_date()
+        set_last_run_data()
 
     if _args.csvout:
         output.write_csv(accuracies, commit_shas, _args.csvout)
+
+    if err:
+        sys.exit(23)
