@@ -106,6 +106,7 @@ class DLLearnerRepo(Iterator):
 
         self.commit_sha1s = \
             [c for c in commit_sha1s if c not in self._knwn_cmmits]
+        self.next_idx = -1
 
     def _init_commit_sha1s_(self):
         self.commit_sha1s = self._get_commits()
