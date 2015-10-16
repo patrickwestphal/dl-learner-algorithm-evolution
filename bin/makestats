@@ -17,8 +17,8 @@ def get_last_run_data():
         return datetime.datetime.now() - datetime.timedelta(30)
 
     with open(LAST_RUN_DATE_FILE, 'r') as f:
-        last_date_str = f.readline()
-        last_accuracy = f.readline()
+        last_date_str = f.readline().strip()
+        last_accuracy = float(f.readline().strip())
 
         # go back one day to be really sure to not skip any commit
         return datetime.datetime.strptime(last_date_str, '%Y-%m-%d') - \
@@ -29,7 +29,7 @@ def set_last_run_data(acc):
     date = datetime.datetime.now()
 
     with open(LAST_RUN_DATE_FILE, 'w') as f:
-        f.writelines([date.strftime('%Y-%m-%d'), acc])
+        f.write('\n'.join([date.strftime('%Y-%m-%d'), str(acc)]))
 
 
 if __name__ == '__main__':
@@ -86,13 +86,13 @@ if __name__ == '__main__':
 
     if len(accuracies) > 0:
         this_runs_accuracy = accuracies[-1]
+        err = min(accuracies) < last_acc
     else:
         this_runs_accuracy = last_acc
-
-    err = min(accuracies) < last_acc
+        err = False
 
     if _args.commits_since[0] == 'inc':
-        set_last_run_data()
+        set_last_run_data(this_runs_accuracy)
 
     if _args.csvout:
         output.write_csv(accuracies, commit_shas, _args.csvout)
