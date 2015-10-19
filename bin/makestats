@@ -84,9 +84,10 @@ if __name__ == '__main__':
     accuracies, commit_shas = repo.main(repo_dir, config_file, since, branch,
                                         already_cloned)
 
-    if len(accuracies) > 0:
+    nn_accs = [a for a in accuracies if a is not None]
+    if len(nn_accs) > 0:
         this_runs_accuracy = accuracies[-1]
-        err = min([a for a in accuracies if a is not None]) < last_acc
+        err = min(nn_accs) < last_acc
     else:
         this_runs_accuracy = last_acc
         err = False
