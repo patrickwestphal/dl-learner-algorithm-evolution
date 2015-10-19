@@ -201,6 +201,9 @@ class DLLearnerCommit(object):
             subprocess.check_call(['git', 'checkout', file],
                                   cwd=self.repo.repo_dir_path)
 
+        subprocess.check_call(['git', 'checkout', self.repo.branch],
+                              cwd=self.repo.repo_dir_path)
+
         self.repo.mark_commit_as_finished(self.sha1)
         _log.info('-Done-')
 
