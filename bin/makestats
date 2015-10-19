@@ -86,7 +86,7 @@ if __name__ == '__main__':
 
     if len(accuracies) > 0:
         this_runs_accuracy = accuracies[-1]
-        err = min(accuracies) < last_acc
+        err = min([a for a in accuracies if a is not None]) < last_acc
     else:
         this_runs_accuracy = last_acc
         err = False
