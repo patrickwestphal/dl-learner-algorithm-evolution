@@ -12,8 +12,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         'Get regression statistics of a DL-Learner setup')
 
-    # parser.add_argument('--csvout', dest='csvout', metavar='csvoutfile',
-    #     help='enable CSV output and determine the target file')
+    parser.add_argument('--csvout', dest='csvout', metavar='csvoutfile',
+        help='enable CSV output and determine the target file')
     parser.add_argument(
         '--plot', dest='plotfile', metavar='plotfile',
         help='enables the generation of a plot showing the accuracy ' +
@@ -49,13 +49,16 @@ if __name__ == '__main__':
     branch = _args.branch if _args.branch is not None else 'develop'
     already_cloned = True if _args.localrepo else False
 
-    if not _args.plotfile:
+    if not _args.plotfile and not _args.csvout:
         print('You should at least define one output method!')
         parser.print_usage()
         sys.exit(0)
 
-    accuracies, commit_shas = repo.main(repo_dir, config_file, since, branch,
+    values, commit_shas = repo.main(repo_dir, config_file, since, branch,
                                         already_cloned)
 
     if _args.plotfile:
-        output.plot(accuracies, commit_shas, _args.plotfile)
+        output.plot(values, commit_shas, _args.plotfile)
+
+    if _args.csvout:
+        output.write_csv(values, commit_shas, _args.csvout)
